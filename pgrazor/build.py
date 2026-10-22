@@ -52,7 +52,14 @@ ANDROID = SDK / 'platforms' / os.environ.get('PGRAZOR_ANDROID_PLATFORM', 'androi
 BUILD = ROOT / 'build'
 
 def run(*args):
-    subprocess.run([str(a) for a in args], cwd=ROOT, check=True)
+    # Remove .exe and .bat extensions for macOS/Linux compatibility
+    processed_args = []
+    for a in args:
+        s = str(a)
+        if s.endswith('.exe'): s = s[:-4]
+        elif s.endswith('.bat'): s = s[:-4]
+        processed_args.append(s)
+    subprocess.run(processed_args, cwd=ROOT, check=True)
 
 def signing_args():
     key = Path(os.environ.get('PGRAZOR_KEYSTORE', str(BUILD/'pgrazor-development.jks')))
