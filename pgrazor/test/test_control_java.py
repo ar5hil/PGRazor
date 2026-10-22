@@ -13,15 +13,53 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 STUBS = {
-    'android/content/Context.java': 'package android.content; public class Context {}',
+    'android/content/Context.java': '''package android.content; public class Context {
+ public static final String NOTIFICATION_SERVICE="notification";
+ public static final String CLIPBOARD_SERVICE="clipboard";
+ public android.content.Context getApplicationContext(){return this;}
+ public Object getSystemService(String name){return null;}
+ public int checkSelfPermission(String permission){return 0;}
+ public java.io.File getFilesDir(){return new java.io.File(".");}
+ public java.io.File getExternalFilesDir(String type){return new java.io.File(".");}
+}''',
+    'android/content/pm/PackageManager.java': 'package android.content.pm; public class PackageManager {public static final int PERMISSION_GRANTED=0;}',
+    'android/os/Build.java': 'package android.os; public class Build {public static class VERSION {public static int SDK_INT=0;}}',
+    'android/R.java': 'package android; public final class R {public static final class drawable {public static final int stat_notify_sync=0;}}',
+    'android/app/NotificationChannel.java': '''package android.app;
+public class NotificationChannel {public NotificationChannel(String id,CharSequence name,int importance){}}''',
+    'android/app/Notification.java': '''package android.app;
+public class Notification {
+ public static class Builder {
+  public Builder(android.content.Context c,String channel){}
+  public Builder setSmallIcon(int icon){return this;} public Builder setContentTitle(CharSequence text){return this;}
+  public Builder setContentText(CharSequence text){return this;} public Builder setAutoCancel(boolean value){return this;}
+  public Notification build(){return new Notification();}
+ }
+}''',
+    'android/app/NotificationManager.java': '''package android.app;
+public class NotificationManager {
+ public static final int IMPORTANCE_LOW=0;
+ public void createNotificationChannel(NotificationChannel channel){}
+ public void notify(int id,Notification notification){}
+}''',
+    'dev/pgrazor/Cooldown.java': '''package dev.pgrazor;
+public final class Cooldown {
+ public static void init(android.app.Application app){}
+ public static void record(String action){}
+ public static long remaining(){return 0;}
+}''',
     'android/app/Activity.java': '''package android.app;
 public class Activity extends android.content.Context {
  public boolean finishing, destroyed;
  public boolean isFinishing(){return finishing;} public boolean isDestroyed(){return destroyed;}
 }''',
     'android/app/Application.java': '''package android.app;
-public class Application {
+public class Application extends android.content.Context {
  public java.io.File getFilesDir(){throw new UnsupportedOperationException("Files not exercised");}
+ public java.io.File getExternalFilesDir(String type){return new java.io.File(".");}
+ public android.app.Application getApplicationContext(){return this;}
+ public Object getSystemService(String name){return null;}
+ public int checkSelfPermission(String permission){return 0;}
  public void registerActivityLifecycleCallbacks(ActivityLifecycleCallbacks c){}
  public interface ActivityLifecycleCallbacks {
   void onActivityResumed(Activity a); void onActivityPaused(Activity a); void onActivityDestroyed(Activity a);

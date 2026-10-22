@@ -190,7 +190,7 @@ function failQuickSummary(reason) {
     quickSummaryFailed = true;
     if (quickSummary && !quickSummaryStop) {
         try { quickSummary.setAllowed(false);if(quickSummary.setSpinAllowed)quickSummary.setSpinAllowed(false);if(quickSummary.setItemOptions)quickSummary.setItemOptions(false,"",false);if(quickSummary.setRocketOptions)quickSummary.setRocketOptions(0,false);if(quickSummary.setBattleOptions)quickSummary.setBattleOptions(0,false);if(quickSummary.setVgpOptions)quickSummary.setVgpOptions(0,false,0,0);if(quickSummary.setBuddyOptions)quickSummary.setBuddyOptions(0,false);if(quickSummary.setIncubatorOptions)quickSummary.setIncubatorOptions(false,false,false);if(quickSummary.setGiftOptions)quickSummary.setGiftOptions(0,false);if(quickSummary.setBerryImpactReady&&(quickBallNativeReady||bootParameters.quickBall!==true))quickSummary.setBerryImpactReady();
-                if(quickSummary.setBerryOptions)quickSummary.setBerryOptions(0,false);if(quickSummary.setSpawnOptions)quickSummary.setSpawnOptions(false,false); }
+                if(quickSummary.setBerryOptions)quickSummary.setBerryOptions(0,false);if(quickSummary.setSpawnOptions)quickSummary.setSpawnOptions(false,false);if(quickSummary.setAutoCatchOptions)quickSummary.setAutoCatchOptions(0,false,1,0,true,3,false,0,0);if(quickSummary.setGymFeedOptions)quickSummary.setGymFeedOptions(false,0,false,0,0);if(quickSummary.setResearchOptions)quickSummary.setResearchOptions(false,"",false); }
         catch (error) { bootLog('quick-summary-revoke-error: '+error); }
     }
     requestSummaryStop();
@@ -199,7 +199,7 @@ function failQuickSummary(reason) {
 function revokeQuickSummary() {
     if (!quickSummary || quickSummaryFailed) return;
     try { quickSummary.setAllowed(false);if(quickSummary.setSpinAllowed)quickSummary.setSpinAllowed(false);if(quickSummary.setItemOptions)quickSummary.setItemOptions(false,"",false);if(quickSummary.setRocketOptions)quickSummary.setRocketOptions(0,false);if(quickSummary.setBattleOptions)quickSummary.setBattleOptions(0,false);if(quickSummary.setVgpOptions)quickSummary.setVgpOptions(0,false,0,0);if(quickSummary.setBuddyOptions)quickSummary.setBuddyOptions(0,false);if(quickSummary.setIncubatorOptions)quickSummary.setIncubatorOptions(false,false,false);if(quickSummary.setGiftOptions)quickSummary.setGiftOptions(0,false);if(quickSummary.setBerryImpactReady&&(quickBallNativeReady||bootParameters.quickBall!==true))quickSummary.setBerryImpactReady();
-                if(quickSummary.setBerryOptions)quickSummary.setBerryOptions(0,false);if(quickSummary.setSpawnOptions)quickSummary.setSpawnOptions(false,false); }
+                if(quickSummary.setBerryOptions)quickSummary.setBerryOptions(0,false);if(quickSummary.setSpawnOptions)quickSummary.setSpawnOptions(false,false);if(quickSummary.setAutoCatchOptions)quickSummary.setAutoCatchOptions(0,false,1,0,true,3,false,0,0);if(quickSummary.setGymFeedOptions)quickSummary.setGymFeedOptions(false,0,false,0,0);if(quickSummary.setResearchOptions)quickSummary.setResearchOptions(false,"",false); }
     catch (error) {
         // Keep a failed optional feature from affecting the original Java lifecycle.
         quickSummaryFailed = true;
@@ -266,6 +266,12 @@ function scheduleQuickSummary() {
                     if(event.kind==='vgp-marker')control.setVgpTarget(!!event.visible,event.x||0,event.y||0,event.action==='spin');
                     if(event.kind==='vgp-status')control.setVgpStatus(event.message);
                     if(event.kind==='vgp-result')control.vgpResult(event.action,!!event.success);
+                    if(event.kind==='native-ready'&&control.setNativeReady)control.setNativeReady(!!event.available,event.available?(event.screen?'Ready: Rasiel native engine':'Ready: direct throws (screen support unavailable)'):'Unavailable: '+(event.reason||'native engine not bundled'));
+                    if(event.kind==='native-status'&&control.setNativeStatus)control.setNativeStatus(event.message);
+                    if(event.kind==='gymfeed-ready'&&control.setGymFeedReady)control.setGymFeedReady(!!event.available,event.available?'Ready: feed gym defenders':'Unavailable: '+(event.reason||'gym feed not bundled'));
+                    if(event.kind==='gymfeed-status'&&control.setGymFeedStatus)control.setGymFeedStatus(event.message);
+                    if(event.kind==='research-ready'&&control.setResearchReady)control.setResearchReady(!!event.available,event.available?'Ready: field research':'Unavailable: '+(event.reason||'research support not bundled'));
+                    if(event.kind==='research-status'&&control.setResearchStatus)control.setResearchStatus(event.message);
                     if(event.kind==='buddy-ready')control.setBuddyReady(!!event.available,event.available?'Ready: choose a berry':'Unavailable: '+event.reason);
                     if(event.kind==='buddy-status')control.setBuddyStatus(event.message);
                     if(event.kind==='incubator-ready')control.setIncubatorReady(!!event.available,event.available?'Ready':'Unavailable: '+event.reason);
@@ -427,6 +433,9 @@ function heartbeat() {
                 if(quickSummary.setBerryImpactReady&&(quickBallNativeReady||bootParameters.quickBall!==true))quickSummary.setBerryImpactReady();
                 if(quickSummary.setBerryOptions)quickSummary.setBerryOptions(control.autoBerry(),control.berriesAllowed());
                 if(quickSummary.setSpawnOptions)quickSummary.setSpawnOptions(control.spawnBooster(),control.spawnAllowed());
+                if(quickSummary.setAutoCatchOptions&&control.nativeCatchRequested)quickSummary.setAutoCatchOptions((control.nativeCatchRequested()?1:0)|(control.nativeSpinRequested()?2:0),control.nativeAllowed(),control.nativeBalls(),control.nativeBerry(),control.nativeCurve(),control.nativeGrade(),control.nativeScreenFree(),control.latitude(),control.longitude());
+                if(quickSummary.setGymFeedOptions&&control.gymFeedEnabled)quickSummary.setGymFeedOptions(control.gymFeedEnabled(),control.gymFeedBerry(),control.gymFeedAllowed(),control.latitude(),control.longitude());
+                if(quickSummary.setResearchOptions&&control.claimResearch)quickSummary.setResearchOptions(control.claimResearch(),String(control.researchRules()),control.researchAllowed());
                 quickSummary.setAllowed(dismiss||transfer);}
             catch (error) {bootLog('quick-summary-heartbeat-error: '+error);failQuickSummary(error);}
         }

@@ -407,7 +407,7 @@ class PackageTests(unittest.TestCase):
             info={'package':'com.nianticlabs.pokemongo','split':None,
                   'providers':[{'name':axml.PROVIDER,'exported':False}]}
             def sdk_fixture(*args,**kwargs):
-                if str(args[0]).endswith('zipalign.exe') and args[1]=='-f':
+                if Path(args[0]).name in ('zipalign','zipalign.exe') and args[1]=='-f':
                     shutil.copyfile(args[-2],args[-1])
                 elif args[1]=='sign':
                     shutil.copyfile(args[-1],args[args.index('--out')+1])

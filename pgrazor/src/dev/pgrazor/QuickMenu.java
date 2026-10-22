@@ -28,9 +28,11 @@ public final class QuickMenu {
         void onFavorites();
         void onTeleport();
         void onSettings();
+        void onAutoCatch();
+        void onAutoSpin();
     }
 
-    static final int MAP = 0, WALK = 1, AUTOWALK = 2, FEEDS = 3, FAVORITES = 4, TELEPORT = 5, SETTINGS = 6;
+    static final int MAP = 0, WALK = 1, AUTOWALK = 2, FEEDS = 3, FAVORITES = 4, TELEPORT = 5, SETTINGS = 6, AUTOCATCH = 7, AUTOSPIN = 8;
 
     private final Activity activity;
     private final Listener listener;
@@ -38,6 +40,7 @@ public final class QuickMenu {
     private final FrameLayout root;
     private final LinearLayout card;
     private TextView walkLabel;
+    private TextView catchLabel, spinLabel;
     private final List<TextView> rowLabels = new ArrayList<>();
     private final List<Icon> rowIcons = new ArrayList<>();
     private final List<Boolean> rowEnabled = new ArrayList<>();
@@ -54,6 +57,10 @@ public final class QuickMenu {
         card.addView(row(MAP, "Map", true, listener::onMap));
         LinearLayout walkRow = (LinearLayout) row(WALK, "Walk", true, this::onWalk); walkLabel = (TextView) walkRow.getChildAt(1);
         card.addView(walkRow);
+        LinearLayout catchRow = (LinearLayout) row(AUTOCATCH, "Auto Catch", true, listener::onAutoCatch); catchLabel = (TextView) catchRow.getChildAt(1);
+        card.addView(catchRow);
+        LinearLayout spinRow = (LinearLayout) row(AUTOSPIN, "Auto Spin", true, listener::onAutoSpin); spinLabel = (TextView) spinRow.getChildAt(1);
+        card.addView(spinRow);
         card.addView(row(AUTOWALK, "Autowalk", true, listener::onAutoWalk));
         card.addView(row(FEEDS, "Feeds", true, listener::onFeeds));
         card.addView(row(FAVORITES, "Favorites", true, listener::onFavorites));
@@ -92,13 +99,18 @@ public final class QuickMenu {
         double speed = Control.engine.speedKmh;
         walkLabel.setText(String.format(Locale.US, "%.1f km/h", speed));
     }
+    private void updateLabels() {
+        String engine = Control.autoEngine()==1 ? "native" : "VGP";
+        if (catchLabel != null) catchLabel.setText("Auto Catch · "+engine+" "+(Control.autoCatchOn()?"ON":"OFF"));
+        if (spinLabel != null) spinLabel.setText("Auto Spin · "+engine+" "+(Control.autoSpinOn()?"ON":"OFF"));
+    }
 
-    public void onRefresh() { if (isShowing()) updateWalk(); }
+    public void onRefresh() { if (isShowing()) updateWalk(); updateLabels(); }
     public boolean isShowing() { return root.getVisibility() == View.VISIBLE; }
     public void toggle() { if (isShowing()) hide(); else show(); }
     public void hide() { root.setVisibility(View.GONE); }
     public void show() {
-        updateWalk();
+        updateWalk(); updateLabels();
         root.setVisibility(View.VISIBLE); root.bringToFront();
         card.post(this::position);
     }
@@ -190,6 +202,21 @@ public final class QuickMenu {
                     paint.setStyle(Paint.Style.FILL);
                     Path nav = new Path(); nav.moveTo(12, 3.5f); nav.lineTo(19.5f, 19.5f); nav.lineTo(12, 15.5f); nav.lineTo(4.5f, 19.5f); nav.close();
                     canvas.drawPath(nav, paint);
+                    break;
+                }
+                case AUTOCATCH: {
+                    paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(1.8f);
+                    canvas.drawCircle(12, 12, 7.5f, paint);
+                    canvas.drawLine(4.5f, 12, 19.5f, 12, paint);
+                    paint.setStyle(Paint.Style.FILL); canvas.drawCircle(12, 12, 2.2f, paint);
+                    break;
+                }
+                case AUTOSPIN: {
+                    paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(1.9f);
+                    canvas.drawArc(new RectF(4, 4, 20, 20), -55, 285, false, paint);
+                    paint.setStyle(Paint.Style.FILL);
+                    Path arrow = new Path(); arrow.moveTo(19.5f, 3.5f); arrow.lineTo(21, 9); arrow.lineTo(15.8f, 7.2f); arrow.close();
+                    canvas.drawPath(arrow, paint);
                     break;
                 }
                 case SETTINGS: {

@@ -98,7 +98,7 @@ public final class Control {
     /** Serializes the compound enabled/overlay/guard decisions; never held across Cooldown or stateLock. */
     private static final Object vgpLock=new Object();
     private static Application vgpApplication;
-    public static boolean vgpEnabled(){guardVgpCooldown();return vgpOverlay&&vgpEnabled;}
+    public static boolean vgpEnabled(){guardVgpCooldown();return autoEngine==0&&vgpOverlay&&vgpEnabled;}
     public static boolean vgpOverlay(){return vgpOverlay;}
     public static void setVgpOverlay(boolean value){synchronized(vgpLock){vgpOverlay=value;if(!value)vgpEnabled=false;vgpTargetAt=0;vgpGuardReason="";}saveSettings();}
     public static boolean vgpOverlayVisible(){return vgpOverlay&&foreground&&backendReady&&connected();}
@@ -110,6 +110,7 @@ public final class Control {
      * clears any guard reason.
      */
     public static void setVgpEnabled(boolean value){
+        if(value&&autoEngine==1){autoEngine=0;nativeCatch=false;nativeSpin=false;saveSettings();event("auto-engine","PGRazor VGP; native stopped");}
         if(!value){synchronized(vgpLock){vgpEnabled=false;vgpTargetAt=0;vgpGuardReason="";vgpStatus="Off";}return;}
         // Read Cooldown before taking vgpLock so the two locks are never nested.
         boolean cooldownActive=vgpStopOnCooldown&&Cooldown.remaining()>0;
@@ -169,7 +170,7 @@ public final class Control {
     public static float vgpTargetY(){return vgpTargetY;}
     public static boolean vgpTargetSpin(){return vgpTargetSpin;}
 
-    public static boolean vgpAllowed(){guardVgpCooldown();long age=SystemClock.elapsedRealtime()-buddyMapSample;return vgpEnabled&&vgpReady&&itemAccessAllowed()&&buddyMapSample>0&&age>=0&&age<1500;}
+    public static boolean vgpAllowed(){guardVgpCooldown();long age=SystemClock.elapsedRealtime()-buddyMapSample;return autoEngine==0&&vgpEnabled&&vgpReady&&itemAccessAllowed()&&buddyMapSample>0&&age>=0&&age<1500;}
     public static void vgpResult(String action,boolean success){
         if(success&&action.equals("spin"))cooldownAction("Pokestop spin");
         Application app=vgpApplication;if(!vgpEnabled||(vgpOptions&4)==0||app==null)return;
@@ -180,6 +181,147 @@ public final class Control {
             manager.notify(7301,new android.app.Notification.Builder(app,"pgrazor-vgp").setSmallIcon(android.R.drawable.stat_notify_sync).setContentTitle("PGRazor VGP").setContentText(message).setAutoCancel(true).build());
         }catch(RuntimeException error){event("vgp-notification-error",error.toString());}
     }
+
+    // ----- Rasiel-native auto catch/spin, gym feeding, and field research -----
+    /** 0 = PGRazor VGP, 1 = Rasiel-native engine. */
+    private static volatile int autoEngine;
+    private static volatile boolean nativeCatch,nativeSpin,nativeReady;
+    private static volatile String nativeStatus="Requires the --quick-close build";
+    /** Bit 0 = Poke Ball, bit 1 = Great Ball, bit 2 = Ultra Ball. */
+    private static volatile int nativeBalls=1;
+    /** 0 = no berry; otherwise one of 701/703/705/706/707. */
+    private static volatile int nativeBerry;
+    private static volatile boolean nativeCurve=true;
+    /** 0 = off, 1 = Nice, 2 = Great, 3 = Excellent. */
+    private static volatile int nativeGrade=3;
+    private static volatile boolean nativeScreenFree;
+    private static volatile boolean gymFeedEnabled,gymFeedReady;
+    private static volatile int gymFeedBerry;
+    private static volatile String gymFeedStatus="Requires the --quick-close build";
+    private static volatile boolean claimResearch,researchReady;
+    private static volatile String researchRules="",researchStatus="Requires the --quick-close build";
+    public static int autoEngine(){return autoEngine;}
+    public static String autoEngineName(){return autoEngine==1?"Rasiel native":"PGRazor VGP";}
+    /**
+     * Switches the automation engine. Only one engine may run: selecting native stops VGP,
+     * and selecting VGP clears the native catch/spin toggles. The selected engine itself is
+     * not started here; the quick-menu Auto Catch/Auto Spin rows (or the switches) do that.
+     */
+    public static void setAutoEngine(int value){
+        if(value!=0&&value!=1)return;
+        if(autoEngine==value)return;
+        autoEngine=value;
+        nativeCatch=false;nativeSpin=false;
+        if(value==1)setVgpEnabled(false);
+        saveSettings();
+        event("auto-engine",value==1?"Rasiel native; VGP stopped":"PGRazor VGP; native stopped");
+    }
+    public static boolean autoCatchOn(){return autoEngine==1?nativeCatch:(vgpEnabled&&(vgpOptions&1)!=0);}
+    public static boolean autoSpinOn(){return autoEngine==1?nativeSpin:(vgpEnabled&&(vgpOptions&2)!=0);}
+    public static void toggleAutoCatch(){
+        if(autoEngine==1){setNativeCatch(!nativeCatch);return;}
+        if(autoCatchOn()){
+            vgpOptions&=~1;
+            if((vgpOptions&3)==0)setVgpEnabled(false);
+            saveSettings();event("auto-catch","OFF");
+        }else{
+            if(!vgpOverlay)setVgpOverlay(true);
+            vgpOptions|=1;setVgpEnabled(true);saveSettings();event("auto-catch","ON; PGRazor VGP");
+        }
+    }
+    public static void toggleAutoSpin(){
+        if(autoEngine==1){setNativeSpin(!nativeSpin);return;}
+        if(autoSpinOn()){
+            vgpOptions&=~2;
+            if((vgpOptions&3)==0)setVgpEnabled(false);
+            saveSettings();event("auto-spin","OFF");
+        }else{
+            if(!vgpOverlay)setVgpOverlay(true);
+            vgpOptions|=2;setVgpEnabled(true);saveSettings();event("auto-spin","ON; PGRazor VGP");
+        }
+    }
+    public static boolean nativeCatch(){return nativeCatch;}
+    public static void setNativeCatch(boolean value){
+        if(value){
+            if(autoEngine!=1){autoEngine=1;saveSettings();event("auto-engine","Rasiel native");}
+            setVgpEnabled(false);
+        }
+        nativeCatch=value;saveSettings();event("native-catch",value?"ON":"OFF");
+    }
+    public static boolean nativeSpin(){return nativeSpin;}
+    public static void setNativeSpin(boolean value){
+        if(value){
+            if(autoEngine!=1){autoEngine=1;saveSettings();event("auto-engine","Rasiel native");}
+            setVgpEnabled(false);
+        }
+        nativeSpin=value;saveSettings();event("native-spin",value?"ON":"OFF");
+    }
+    public static boolean nativeCatchRequested(){return autoEngine==1&&nativeCatch;}
+    public static boolean nativeSpinRequested(){return autoEngine==1&&nativeSpin;}
+    public static boolean nativeReady(){return nativeReady;}
+    public static void setNativeReady(boolean ready,String status){nativeReady=ready;nativeStatus=status==null?"":status;}
+    public static String nativeStatus(){return nativeStatus;}
+    public static void setNativeStatus(String status){nativeStatus=status==null?"":status;}
+    public static boolean nativeAvailable(){return nativeReady&&itemAccessAllowed();}
+    public static boolean nativeAllowed(){return autoEngine==1&&(nativeCatch||nativeSpin)&&nativeAvailable()&&foreground&&backendReady&&connected();}
+    public static int nativeBalls(){return nativeBalls;}
+    public static void setNativeBalls(int mask){if(mask<1||mask>7)return;nativeBalls=mask;saveSettings();event("native-balls",String.valueOf(mask));}
+    public static int nativeBerry(){return nativeBerry;}
+    public static void setNativeBerry(int id){if(!berryChoice(id))return;nativeBerry=id;saveSettings();}
+    public static boolean nativeCurve(){return nativeCurve;}
+    public static void setNativeCurve(boolean value){nativeCurve=value;saveSettings();event("native-curve",value?"ON":"OFF");}
+    public static int nativeGrade(){return nativeGrade;}
+    public static void setNativeGrade(int grade){if(grade<0||grade>3)return;nativeGrade=grade;saveSettings();event("native-grade",String.valueOf(grade));}
+    public static boolean nativeScreenFree(){return nativeScreenFree;}
+    public static void setNativeScreenFree(boolean value){nativeScreenFree=value;saveSettings();event("native-screen-free",value?"ON":"OFF");}
+    public static boolean gymFeedEnabled(){return gymFeedEnabled;}
+    public static void setGymFeedEnabled(boolean value){gymFeedEnabled=value;saveSettings();event("gym-feed-setting",value?"ON":"OFF");}
+    public static int gymFeedBerry(){return gymFeedBerry;}
+    public static void setGymFeedBerry(int id){if(!berryChoice(id))return;gymFeedBerry=id;saveSettings();}
+    public static boolean gymFeedAvailable(){return gymFeedReady&&itemAccessAllowed();}
+    public static boolean gymFeedAllowed(){return gymFeedEnabled&&gymFeedAvailable()&&foreground&&backendReady&&connected();}
+    public static boolean gymFeedReady(){return gymFeedReady;}
+    public static void setGymFeedReady(boolean ready,String status){gymFeedReady=ready;gymFeedStatus=status==null?"":status;}
+    public static String gymFeedStatus(){return gymFeedStatus;}
+    public static void setGymFeedStatus(String status){gymFeedStatus=status==null?"":status;}
+    public static boolean claimResearch(){return claimResearch;}
+    public static void setClaimResearch(boolean value){claimResearch=value;saveSettings();event("research-claim",value?"ON":"OFF");}
+    public static String researchRules(){return researchRules;}
+    public static boolean researchReady(){return researchReady;}
+    public static void setResearchReady(boolean ready,String status){researchReady=ready;researchStatus=status==null?"":status;}
+    public static String researchStatus(){return researchStatus;}
+    public static void setResearchStatus(String status){researchStatus=status==null?"":status;}
+    public static boolean researchActive(){return claimResearch||!researchRules.trim().isEmpty();}
+    public static boolean researchAvailable(){return researchReady&&quickSummaryReady()&&foreground&&backendReady&&connected();}
+    public static boolean researchAllowed(){return researchActive()&&researchAvailable();}
+    /** Validates and stores the field-research filter; each non-empty line is {@code task|reward}. */
+    public static void setResearchOptions(boolean claim,String rules){
+        researchRules=normalizeResearchRules(rules);claimResearch=claim;saveSettings();
+        event("research-options",(claim?"claim ON":"claim OFF")+"; rules="+researchRuleCount());
+    }
+    private static boolean berryChoice(int id){return id==0||id==701||id==703||id==705||id==706||id==707;}
+    private static int researchRuleCount(){
+        if(researchRules.isEmpty())return 0;int n=0;for(String line:researchRules.split("\\n"))if(!line.trim().isEmpty())n++;return n;
+    }
+    private static String normalizeResearchRules(String rules){
+        if(rules==null)return "";
+        if(rules.length()>8000)throw new IllegalArgumentException("Research filter is too long");
+        StringBuilder out=new StringBuilder();int count=0;
+        for(String raw:rules.split("\\r?\\n")){
+            String line=raw.trim();if(line.isEmpty())continue;
+            int bar=line.indexOf('|');
+            String text=(bar<0?line:line.substring(0,bar)).trim();
+            String reward=(bar<0?"*":line.substring(bar+1)).trim();
+            if(text.length()>200||reward.length()>200)throw new IllegalArgumentException("Research rule is too long");
+            if(text.isEmpty())text="*";
+            if(reward.isEmpty())reward="*";
+            if(count>=64)throw new IllegalArgumentException("At most 64 research rules are supported");
+            if(count++>0)out.append('\n');
+            out.append(text).append('|').append(reward);
+        }
+        return out.toString();
+    }
+
     private static volatile boolean autoIncubate, incubateLongest, incubatorReady;
     private static volatile String incubatorStatus="Waiting for incubation support";
     public static boolean autoIncubate(){return autoIncubate;}
@@ -316,7 +458,13 @@ public final class Control {
         }
     }
     public static boolean quickSummaryConfigured() { return quickSummaryConfigured; }
-    public static void configureQuickSummaryAutoDismiss(boolean enabled) { quickSummaryAutoDismiss=enabled; }
+    public static void configureQuickSummaryAutoDismiss(boolean enabled) {
+        quickSummaryAutoDismiss=enabled;
+        // Native catch/spin, gym feeding, and field research ship only in the
+        // quick-close script; keep the settings status honest in other builds.
+        if(!enabled){nativeStatus="Requires the --quick-close build";gymFeedStatus="Requires the --quick-close build";researchStatus="Requires the --quick-close build";}
+        else{if(nativeStatus.startsWith("Requires"))nativeStatus="Waiting for Rasiel native support";if(gymFeedStatus.startsWith("Requires"))gymFeedStatus="Waiting for gym feed support";if(researchStatus.startsWith("Requires"))researchStatus="Waiting for field research support";}
+    }
     public static boolean quickSummaryAutoDismiss() { return quickSummaryAutoDismiss; }
     public static boolean quickSummaryReady() { return quickSummaryConfigured && quickSummaryReady; }
     public static boolean quickSummaryEnabled() { return quickSummaryEnabled; }
@@ -802,6 +950,24 @@ public final class Control {
                 itemRules=p.getProperty("itemRules","");itemLimits=p.getProperty("itemLimits","");itemCatalog=p.getProperty("itemCatalog","");
                 if(!validItemRules(itemRules)||!validItemRules(itemLimits)){itemTransferEnabled=false;itemRules="";itemLimits="";}
                 quickSpinEnabled=Boolean.parseBoolean(p.getProperty("quickSpin","false"));
+                try{autoEngine=Integer.parseInt(p.getProperty("autoEngine","0"));}catch(NumberFormatException ignored){autoEngine=0;}
+                if(autoEngine!=0&&autoEngine!=1)autoEngine=0;
+                nativeCatch=Boolean.parseBoolean(p.getProperty("nativeCatch","false"));
+                nativeSpin=Boolean.parseBoolean(p.getProperty("nativeSpin","false"));
+                if(autoEngine==0){nativeCatch=false;nativeSpin=false;}
+                try{nativeBalls=Integer.parseInt(p.getProperty("nativeBalls","1"));}catch(NumberFormatException ignored){nativeBalls=1;}
+                if(nativeBalls<1||nativeBalls>7)nativeBalls=1;
+                try{nativeBerry=Integer.parseInt(p.getProperty("nativeBerry","0"));}catch(NumberFormatException ignored){nativeBerry=0;}
+                if(!berryChoice(nativeBerry))nativeBerry=0;
+                nativeCurve=Boolean.parseBoolean(p.getProperty("nativeCurve","true"));
+                try{nativeGrade=Integer.parseInt(p.getProperty("nativeGrade","3"));}catch(NumberFormatException ignored){nativeGrade=3;}
+                if(nativeGrade<0||nativeGrade>3)nativeGrade=3;
+                nativeScreenFree=Boolean.parseBoolean(p.getProperty("nativeScreenFree","false"));
+                gymFeedEnabled=Boolean.parseBoolean(p.getProperty("gymFeed","false"));
+                try{gymFeedBerry=Integer.parseInt(p.getProperty("gymFeedBerry","0"));}catch(NumberFormatException ignored){gymFeedBerry=0;}
+                if(!berryChoice(gymFeedBerry))gymFeedBerry=0;
+                claimResearch=Boolean.parseBoolean(p.getProperty("claimResearch","false"));
+                try{researchRules=normalizeResearchRules(p.getProperty("researchRules",""));}catch(IllegalArgumentException invalid){researchRules="";claimResearch=false;}
                 autoTransferEnabled=Boolean.parseBoolean(p.getProperty("autoTransfer","false"));
                 try { transferProtect=Integer.parseInt(p.getProperty("transferProtect","63")); if(transferProtect<0||transferProtect>63)transferProtect=63; } catch(NumberFormatException e){transferProtect=63;}
                 // Migrate the former independent animation preference to Quick Catch.
@@ -809,7 +975,7 @@ public final class Control {
                 throwCurve=Boolean.parseBoolean(p.getProperty("curve","false"));
                 throwAr=Boolean.parseBoolean(p.getProperty("throwAr","false"));
                 throwGrade=boundedSetting(p,"grade",3); mapTapMode=boundedSetting(p,"mapTap",2);
-                event("settings-restored","dismiss="+quickSummaryEnabled+" fastBall="+quickBallEnabled+" grade="+throwGrade+" curve="+throwCurve+" mapTap="+mapTapMode+" cameraRelative=true");
+                event("settings-restored","dismiss="+quickSummaryEnabled+" fastBall="+quickBallEnabled+" grade="+throwGrade+" curve="+throwCurve+" mapTap="+mapTapMode+" engine="+autoEngineName()+" nativeCatch="+nativeCatch+" nativeSpin="+nativeSpin+" gymFeed="+gymFeedEnabled+" claimResearch="+claimResearch+" cameraRelative=true");
             } catch(FileNotFoundException missing) {
                 // Defaults apply only until the user first saves a choice.
             } catch(IOException | RuntimeException error) { event("settings-load-error",error.toString()); }
@@ -861,6 +1027,13 @@ public final class Control {
                 p.setProperty("rocketOptions",String.valueOf(rocketOptions));
                 p.setProperty("itemTransfer",String.valueOf(itemTransferEnabled));p.setProperty("itemRules",itemRules);p.setProperty("itemLimits",itemLimits);p.setProperty("itemCatalog",itemCatalog);
                 p.setProperty("quickSpin",String.valueOf(quickSpinEnabled));
+                p.setProperty("autoEngine",String.valueOf(autoEngine));
+                p.setProperty("nativeCatch",String.valueOf(nativeCatch));p.setProperty("nativeSpin",String.valueOf(nativeSpin));
+                p.setProperty("nativeBalls",String.valueOf(nativeBalls));p.setProperty("nativeBerry",String.valueOf(nativeBerry));
+                p.setProperty("nativeCurve",String.valueOf(nativeCurve));p.setProperty("nativeGrade",String.valueOf(nativeGrade));
+                p.setProperty("nativeScreenFree",String.valueOf(nativeScreenFree));
+                p.setProperty("gymFeed",String.valueOf(gymFeedEnabled));p.setProperty("gymFeedBerry",String.valueOf(gymFeedBerry));
+                p.setProperty("claimResearch",String.valueOf(claimResearch));p.setProperty("researchRules",researchRules);
                 p.setProperty("autoTransfer",String.valueOf(autoTransferEnabled)); p.setProperty("transferProtect",String.valueOf(transferProtect));
                 p.setProperty("autoDismiss",String.valueOf(quickSummaryEnabled)); p.setProperty("fastBall",String.valueOf(quickBallEnabled));
                 p.setProperty("throwAr",String.valueOf(throwAr)); p.setProperty("curve",String.valueOf(throwCurve)); p.setProperty("grade",String.valueOf(throwGrade));

@@ -36,6 +36,10 @@ public final class Pad {
     // Boolean settings use proper switches.
     private Switch vgpSwitch, joystickSwitch, cooldownSwitch, spawnSwitch, autoTransferSwitch,
         quickSpinSwitch, berrySwitch, quickSummarySwitch, curveSwitch, arSwitch;
+    private Switch nativeCatchSwitch,nativeSpinSwitch,nativeCurveSwitch,nativeScreenFreeSwitch,gymFeedSwitch,researchSwitch;
+    private Button autoEngineButton,nativeGradeButton,nativeBerryButton,gymBerryButton,researchRulesButton;
+    private TextView nativeStatus,gymFeedStatus,researchStatus;
+    private final CheckBox[] nativeBallChoices=new CheckBox[3];
     private TextView quickSummaryLabel, vgpStatus;
     private final CheckBox[] vgpChoices=new CheckBox[3];
     private CheckBox vgpCooldownStop;
@@ -281,6 +285,55 @@ public final class Pad {
         vgpCooldownStop.setOnClickListener(v->{if(vgpCooldownStop.isChecked()!=Control.vgpStopOnCooldown())Control.setVgpStopOnCooldown(vgpCooldownStop.isChecked());refresh();});
         vgpStatus=caption(vgpC,Control.vgpStatus());
 
+        // ----- Auto catch & spin engine -----
+        LinearLayout autoC=section(body,"Auto catch & spin",true);
+        autoEngineButton=button("Engine: PGRazor VGP");autoC.addView(autoEngineButton);
+        autoEngineButton.setOnClickListener(v->{Control.setAutoEngine(Control.autoEngine()==1?0:1);refresh();});
+        nativeCatchSwitch=switchRow(autoC,"Rasiel native auto catch");
+        nativeCatchSwitch.setChecked(Control.nativeCatch());
+        nativeCatchSwitch.setOnCheckedChangeListener((v,checked)->{if(checked!=Control.nativeCatch())Control.setNativeCatch(checked);refresh();});
+        nativeSpinSwitch=switchRow(autoC,"Rasiel native auto spin");
+        nativeSpinSwitch.setChecked(Control.nativeSpin());
+        nativeSpinSwitch.setOnCheckedChangeListener((v,checked)->{if(checked!=Control.nativeSpin())Control.setNativeSpin(checked);refresh();});
+        LinearLayout ballRow=new LinearLayout(host);ballRow.setOrientation(LinearLayout.HORIZONTAL);ballRow.setGravity(Gravity.CENTER_VERTICAL);
+        TextView ballLabel=new TextView(host);ballLabel.setText("Balls");ballLabel.setTextSize(14);ballRow.addView(ballLabel,new LinearLayout.LayoutParams(0,-2,1f));
+        String[] ballNames={"Poke","Great","Ultra"};
+        for(int i=0;i<3;i++){final int bit=1<<i;CheckBox box=new CheckBox(host);box.setText(ballNames[i]);box.setChecked((Control.nativeBalls()&bit)!=0);nativeBallChoices[i]=box;ballRow.addView(box);
+            box.setOnClickListener(v->{int mask=Control.nativeBalls();mask=box.isChecked()?mask|bit:mask&~bit;if(mask==0){box.setChecked(true);return;}Control.setNativeBalls(mask);});}
+        autoC.addView(ballRow);
+        nativeGradeButton=button("Native throw: Excellent");autoC.addView(nativeGradeButton);
+        nativeGradeButton.setOnClickListener(v->{Control.setNativeGrade((Control.nativeGrade()+1)%4);refresh();});
+        nativeBerryButton=button("Native berry: Off");autoC.addView(nativeBerryButton);
+        nativeBerryButton.setOnClickListener(v->{int index=0;for(int i=0;i<BERRY_IDS.length;i++)if(BERRY_IDS[i]==Control.nativeBerry())index=i;Control.setNativeBerry(BERRY_IDS[(index+1)%BERRY_IDS.length]);refresh();});
+        nativeCurveSwitch=switchRow(autoC,"Curveball throws");
+        nativeCurveSwitch.setChecked(Control.nativeCurve());
+        nativeCurveSwitch.setOnCheckedChangeListener((v,checked)->{if(checked!=Control.nativeCurve())Control.setNativeCurve(checked);});
+        nativeScreenFreeSwitch=switchRow(autoC,"Screen-free catches (direct throw)");
+        nativeScreenFreeSwitch.setChecked(Control.nativeScreenFree());
+        nativeScreenFreeSwitch.setOnCheckedChangeListener((v,checked)->{if(checked!=Control.nativeScreenFree())Control.setNativeScreenFree(checked);});
+        caption(autoC,"The selected engine owns Auto Catch and Auto Spin. Switching engines stops the other one. Balls, berries, and throw settings apply to the Rasiel native engine; berries are used by screen catches. Native automation requires the --quick-close build.");
+        nativeStatus=caption(autoC,Control.nativeStatus());
+
+        // ----- Auto gym feed -----
+        LinearLayout gymC=section(body,"Auto gym feed",false);
+        gymFeedSwitch=switchRow(gymC,"Feed gym defenders");
+        gymFeedSwitch.setChecked(Control.gymFeedEnabled());
+        gymFeedSwitch.setOnCheckedChangeListener((v,checked)->{if(checked!=Control.gymFeedEnabled())Control.setGymFeedEnabled(checked);refresh();});
+        gymBerryButton=button("Gym berry: Auto (any owned)");gymC.addView(gymBerryButton);
+        gymBerryButton.setOnClickListener(v->{int index=0;for(int i=0;i<BERRY_IDS.length;i++)if(BERRY_IDS[i]==Control.gymFeedBerry())index=i;Control.setGymFeedBerry(BERRY_IDS[(index+1)%BERRY_IDS.length]);refresh();});
+        caption(gymC,"Feeds one owned berry per defender, up to 10 per gym every 30 minutes.");
+        gymFeedStatus=caption(gymC,Control.gymFeedStatus());
+
+        // ----- Field research -----
+        LinearLayout researchC=section(body,"Field research",false);
+        researchSwitch=switchRow(researchC,"Auto claim completed field research");
+        researchSwitch.setChecked(Control.claimResearch());
+        researchSwitch.setOnCheckedChangeListener((v,checked)->{if(checked!=Control.claimResearch())Control.setClaimResearch(checked);refresh();});
+        researchRulesButton=button("Research filter: 0 rules");researchC.addView(researchRulesButton);
+        researchRulesButton.setOnClickListener(v->showResearchRules());
+        caption(researchC,"Matching research is removed instead of claimed. Filter lines use task|reward; use * for any task or reward and :? for any quantity (for example Catch 5 Pokemon|p:25). Empty filter keeps every task.");
+        researchStatus=caption(researchC,Control.researchStatus());
+
         // ----- Auto feed buddy -----
         LinearLayout eggsC = section(body, "Auto incubate eggs", false);
         incubatorSwitch = switchRow(eggsC, "Auto incubate");
@@ -398,6 +451,8 @@ public final class Pad {
             public void onFavorites(){QuickLocationDialogs.showFavorites(activity,Pad.this::quickTeleport);}
             public void onTeleport(){QuickLocationDialogs.showTeleport(activity,Pad.this::quickTeleport);}
             public void onSettings(){openSettings();}
+            public void onAutoCatch(){Control.toggleAutoCatch();refresh();}
+            public void onAutoSpin(){Control.toggleAutoSpin();refresh();}
         });
         launcher.setOnClickListener(v->{if(quickMenu!=null)quickMenu.toggle();});draggable(launcher,launcher,true);
 
@@ -437,6 +492,26 @@ public final class Pad {
         }
     }
 
+    private String berryName(int id){for(int i=0;i<BERRY_IDS.length;i++)if(BERRY_IDS[i]==id)return BERRY_NAMES[i];return "Off";}
+    private int researchRuleCount(){String r=Control.researchRules();if(r.isEmpty())return 0;int n=0;for(String line:r.split("\\n"))if(!line.trim().isEmpty())n++;return n;}
+    private void showResearchRules(){
+        LinearLayout form=new LinearLayout(activity);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(dp(18),dp(4),dp(18),0);
+        EditText rules=new EditText(dialogContext());
+        rules.setText(Control.researchRules());
+        rules.setHint("Catch 5 Pok\u00e9mon|p:25\n*|i:1:?");
+        rules.setMinLines(6);rules.setGravity(Gravity.TOP|Gravity.START);
+        rules.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        form.addView(rules,new LinearLayout.LayoutParams(-1,dp(220)));
+        TextView help=new TextView(dialogContext());help.setTextSize(12);help.setText("One rule per line: normalized task text|reward token.\nMatching research is removed, not claimed.\nExamples: Catch 5 Pok\u00e9mon|p:25   *|i:1:?   Spin 3 Pok\u00e9Stops|s:?");
+        form.addView(help);
+        AlertDialog dialog=new AlertDialog.Builder(dialogContext()).setTitle("Field research filter").setView(form)
+            .setNegativeButton("Cancel",null).setPositiveButton("Save",null).create();
+        dialog.setOnShowListener(ignored->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            try{Control.setResearchOptions(Control.claimResearch(),rules.getText().toString());dialog.dismiss();refresh();}
+            catch(IllegalArgumentException error){rules.setError(error.getMessage());}
+        }));
+        dialog.show();
+    }
     private void refresh() {
         if(vgpToggle!=null){vgpToggle.setVisibility(Control.vgpOverlayVisible()&&panel.getVisibility()!=View.VISIBLE&&!(quickMenu!=null&&quickMenu.isShowing())?View.VISIBLE:View.GONE);vgpToggle.setContentDescription("Virtual Go Plus "+(Control.vgpEnabled()?"on; tap to turn off":"off; tap to turn on")+". "+Control.vgpStatus());vgpToggle.invalidate();}
 
@@ -478,6 +553,22 @@ public final class Pad {
         incubatorStatus.setText(Control.autoIncubate() ? Control.incubatorStatus() : "Off");
         for(int i=0;i<3;i++)vgpChoices[i].setChecked((Control.vgpOptions()&(1<<i))!=0);
         vgpCooldownStop.setChecked(Control.vgpStopOnCooldown());
+        autoEngineButton.setText("Engine: "+Control.autoEngineName());
+        nativeCatchSwitch.setChecked(Control.nativeCatch());
+        nativeSpinSwitch.setChecked(Control.nativeSpin());
+        for(int i=0;i<3;i++)nativeBallChoices[i].setChecked((Control.nativeBalls()&(1<<i))!=0);
+        nativeGradeButton.setText("Native throw: "+new String[]{"OFF","Nice","Great","Excellent"}[Control.nativeGrade()]);
+        nativeBerryButton.setText("Native berry: "+berryName(Control.nativeBerry()));
+        nativeCurveSwitch.setChecked(Control.nativeCurve());
+        nativeScreenFreeSwitch.setChecked(Control.nativeScreenFree());
+        nativeStatus.setText(Control.nativeStatus());
+        gymFeedSwitch.setChecked(Control.gymFeedEnabled());
+        gymBerryButton.setText("Gym berry: "+(Control.gymFeedBerry()==0?"Auto (any owned)":berryName(Control.gymFeedBerry())));
+        gymFeedStatus.setText(Control.gymFeedStatus());
+        researchSwitch.setChecked(Control.claimResearch());
+        int ruleCount=researchRuleCount();
+        researchRulesButton.setText("Research filter: "+ruleCount+" rule"+(ruleCount==1?"":"s"));
+        researchStatus.setText(Control.researchStatus());
         buddyStatus.setText(Control.buddyStatus());
         for(int i=0;i<BERRY_IDS.length;i++){int id=BERRY_IDS[i],count=Control.berryCount(id);RadioButton b=buddyChoices[i];b.setText(BERRY_NAMES[i]+(id==0?"":" ("+count+")"));b.setChecked(Control.buddyBerry()==id);boolean ready=id==0||(count>0&&Control.buddyAvailable());b.setEnabled(ready);b.setAlpha(ready?1f:0.4f);}
         for(int i=0;i<3;i++)giftChoices[i].setChecked((Control.giftOptions()&(1<<i))!=0);giftStatus.setText(Control.giftStatus());
