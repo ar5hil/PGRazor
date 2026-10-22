@@ -33,3 +33,4 @@ Thumbs.db
 /pgrazor/build-retention.json
 /dist/
 /release
+pgrazor/build_macos.py
